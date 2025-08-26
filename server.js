@@ -14,49 +14,34 @@ const ordersRoutes = require('./routes/orders');
 
 const app = express();
 
-// ✅ Middleware
 app.use(cors({
-  origin: 'http://localhost:3000', // React app
+  origin: process.env.CLIENT_URL || '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Serve static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/orders', ordersRoutes); // Orders routes including accept, received, delete
+app.use('/api/orders', ordersRoutes);
 
-// ✅ Health check
 app.get('/', (req, res) => {
-  res.send('API is running...');
+  res.send('✅ Backend API is running');
 });
 
-// ✅ Global error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// ✅ Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => {
-  console.log('✅ MongoDB connected');
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-  });
-})
+.then(() => console.log('✅ MongoDB connected'))
 .catch(err => {
-  console.error('❌ MongoDB connection error:', err);
-  process.exit(1);
+  console.error('❌ MongoDB error:', err);
 });
+
+// ✅ Export for Vercel
+module.exports = app;
