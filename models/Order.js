@@ -1,19 +1,27 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const orderSchema = new mongoose.Schema({
-  email: { type: String, required: true },
-  items: [
-    {
-      name: String,
-      quantity: Number,
-    }
-  ],
-  totalAmount: { type: Number, required: true },
-  orderId: { type: String, required: true }, 
-  orderStatus: { type: String, default: 'Pending' }, // ✅ matches backend route
-  token: { type: Number, default: null }, // ✅ will store the 3-digit code
-  received: { type: String, default: 'No' },
-  createdAt: { type: Date, default: Date.now }
-});
+const orderSchema = new mongoose.Schema(
+  {
+    username: String,
+    userEmail: String,
+    items: [
+      {
+        name: String,
+        quantity: Number,
+      },
+    ],
+    orderId: String,
+    token: String,
+    status: {
+      type: String,
+      default: "Pending",   // ✅ initially pending
+    },
+    isReceived: {
+      type: Boolean,
+      default: null,        // ✅ can be Yes / No
+    },
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Order', orderSchema);
+module.exports = mongoose.model("Order", orderSchema);
