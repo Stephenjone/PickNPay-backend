@@ -17,11 +17,16 @@ const app = express();
 // ✅ Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || '*', // Allow frontend URL in .env (Render/Vercel)
+    origin: [
+      process.env.CLIENT_URL || "http://localhost:3000", 
+      "https://pick-n-pay-frontend.vercel.app" // 👈 add your Vercel frontend URL here
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   })
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -33,11 +38,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/orders', ordersRoutes); // Orders routes including accept, received, delete
+app.use('/api/orders', ordersRoutes);
 
 // ✅ Health check
 app.get('/', (req, res) => {
-  res.json({ message: '✅ API is running...' });
+  res.json({ message: '✅ API is running on Render...' });
 });
 
 // ✅ Global error handling middleware
@@ -55,10 +60,10 @@ mongoose
   .then(() => {
     console.log('✅ MongoDB connected');
 
-    // 🔑 IMPORTANT: Render requires process.env.PORT
     const PORT = process.env.PORT || 5000;
+    // 👇 important: Render needs 0.0.0.0
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running at http://localhost:${PORT}`);
+      console.log(`🚀 Server running on port ${PORT}`);
     });
   })
   .catch((err) => {
