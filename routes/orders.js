@@ -1,4 +1,3 @@
-// routes/orders.js
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
@@ -13,7 +12,7 @@ function generateToken() {
   return String(Math.floor(1 + Math.random() * 999)).padStart(3, "0");
 }
 
-// 📌 Create new order
+// 📌 Create new order (User places order)
 router.post("/", async (req, res) => {
   try {
     const { username, email, items } = req.body;
@@ -25,7 +24,8 @@ router.post("/", async (req, res) => {
       orderId: generateOrderId(),
       token: generateToken(),
       status: "Pending",
-      isReceived: false,
+      isReceived: null,
+      notification: "",
     });
 
     await newOrder.save();
@@ -36,56 +36,92 @@ router.post("/", async (req, res) => {
   }
 });
 
-// 📌 Get all orders
+// 📌 Get all orders (Admin view only — no notifications!)
 router.get("/", async (req, res) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 });
-    res.json(orders);
+
+    // Remove notification field before sending to admin
+    const adminOrders = orders.map((o) => {
+      const obj = o.toObject();
+      delete obj.notification;
+      return obj;
+    });
+
+    res.json(adminOrders);
   } catch (err) {
     console.error("Error fetching orders:", err);
     res.status(500).json({ message: "Error fetching orders" });
   }
 });
 
-// 📌 Accept order
-// Should be in routes/orders.js
+// 📌 Accept order (Admin)
 router.put("/:id/accept", async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { status: "Accepted" },
-      { new: true }
+      { new: true, projection: { notification: 0 } } // hide notification
     );
+
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
     res.json(order);
   } catch (err) {
+    console.error("Error accepting order:", err);
     res.status(500).json({ message: "Error accepting order" });
   }
 });
 
-
-
-
-// 📌 Mark order received
+// 📌 Mark order received (Admin clicks Yes/No)
 router.put("/:id/received", async (req, res) => {
   try {
     const { isReceived } = req.body;
+
+    let notification = "";
+    if (isReceived) {
+      notification = "✅ Your order is collected from the restaurant.";
+    } else {
+      notification =
+        "⏳ Your order is waiting at the restaurant, please collect it.";
+    }
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { isReceived },
+      { isReceived, notification },
       { new: true }
     );
-    res.json(order);
+
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Hide notification when sending to admin
+    const adminOrder = order.toObject();
+    delete adminOrder.notification;
+
+    res.json(adminOrder);
   } catch (err) {
     console.error("Error updating received status:", err);
     res.status(500).json({ message: "Error updating received status" });
   }
 });
 
+// 📌 User fetches their own orders (User side only — includes notifications!)
+router.get("/user/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const orders = await Order.find({ email }).sort({ createdAt: -1 });
+    res.json(orders); // user gets notifications
+  } catch (err) {
+    console.error("Error fetching user orders:", err);
+    res.status(500).json({ message: "Error fetching user orders" });
+  }
+});
 
-// 📌 Delete order
+// 📌 Delete order (Admin)
 router.delete("/:id", async (req, res) => {
   try {
-    await Order.findByIdAndDelete(req.params.id);
+    const order = await Order.findByIdAndDelete(req.params.id);
+    if (!order) return res.status(404).json({ message: "Order not found" });
     res.json({ message: "Order deleted" });
   } catch (err) {
     console.error("Error deleting order:", err);

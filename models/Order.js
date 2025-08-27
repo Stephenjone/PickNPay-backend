@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
-const orderSchema = new mongoose.Schema(
+const OrderSchema = new mongoose.Schema(
   {
     username: String,
-    userEmail: String,
+    email: String,
     items: [
       {
         name: String,
@@ -12,16 +12,11 @@ const orderSchema = new mongoose.Schema(
     ],
     orderId: String,
     token: String,
-    status: {
-      type: String,
-      default: "Pending",   // ✅ initially pending
-    },
-    isReceived: {
-      type: Boolean,
-      default: null,        // ✅ can be Yes / No
-    },
+    status: { type: String, default: "Pending" },
+    isReceived: { type: Boolean, default: null },
+    notification: { type: String, default: "" }, // ✅ only user sees this
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Order", orderSchema);
+module.exports = mongoose.model("Order", OrderSchema);
