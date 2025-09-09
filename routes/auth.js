@@ -5,54 +5,80 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// REGISTER
+// ✅ REGISTER
 router.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
+
+  // Basic validation
   if (!name || !email || !password) {
-    return res.status(400).json({ error: "Please fill all the fields." });
+    return res.status(400).json({ error: 'Please fill all the fields.' });
   }
 
   try {
+    // Check if user already exists
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: "Email already exists." });
+    if (existingUser) {
+      console.log('⚠️ Registration attempt with existing email:', email);
+      return res.status(400).json({ error: 'Email already exists.' });
+    }
 
+    // Hash password and save user
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
 
-    res.status(201).json({ message: "User registered successfully!" });
+    console.log('✅ New user registered:', email);
+
+    return res.status(201).json({ message: 'User registered successfully!' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error during registration." });
+    console.error('❌ Registration error:', err);
+    return res.status(500).json({ error: 'Server error during registration.' });
   }
 });
 
-// LOGIN
+// ✅ LOGIN
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "Please fill all the fields." });
+
+  // Basic validation
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Please fill all the fields.' });
+  }
 
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: "User not found." });
+
+    if (!user) {
+      console.log('❌ Login failed. User not found:', email);
+      return res.status(404).json({ error: 'User not found.' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
+    if (!isMatch) {
+      console.log('❌ Invalid login credentials for:', email);
+      return res.status(400).json({ error: 'Invalid credentials.' });
+    }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET || 'default_secret_key',
+      { expiresIn: '1h' }
+    );
 
-    res.status(200).json({
+    console.log('✅ Login successful:', email);
+
+    return res.status(200).json({
       message: 'Login successful!',
       token,
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
-      }
+        email: user.email,
+      },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error." });
+    console.error('❌ Login error:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
