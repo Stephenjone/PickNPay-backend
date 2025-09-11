@@ -14,48 +14,48 @@ const ordersRoutes = require('./routes/orders');
 
 const app = express();
 
-// Allowed origins: local dev + deployed frontend domain
+// Allowed origins for CORS (frontend URLs)
 const allowedOrigins = [
   'http://localhost:3000',
-  process.env.CLIENT_URL, // deployed frontend URL from .env
+  process.env.CLIENT_URL, // e.g. 'https://picknpay-frontend-application.onrender.com'
 ];
 
-// CORS middleware with dynamic origin checking
+// Setup CORS middleware
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `❌ The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+    if (!origin) return callback(null, true); // Allow non-browser tools like Postman
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      const msg = `❌ The CORS policy does not allow access from origin: ${origin}`;
       return callback(new Error(msg), false);
     }
-    return callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, // Set true if you are using cookies or authentication sessions
+  credentials: true,
 }));
 
-// Middleware to parse JSON and urlencoded bodies
+// Parse incoming JSON and urlencoded form data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static folder for uploaded files
+// Serve static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// API routes
+// API routes registration
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/orders', ordersRoutes);
 
-// Health check endpoint
+// Root endpoint for quick health check
 app.get('/', (req, res) => {
   res.send('✅ API is running...');
 });
 
-// Global error handler for CORS and other errors
+// Global error handler (especially for CORS errors)
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled Error:', err.message);
   if (err.message.startsWith('❌ The CORS policy')) {
@@ -64,7 +64,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Connect to MongoDB and start the server
+// Connect to MongoDB and start server
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,

@@ -5,24 +5,20 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// ✅ REGISTER
+
 router.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
-
-  // Basic validation
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Please fill all the fields.' });
   }
 
   try {
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       console.log('⚠️ Registration attempt with existing email:', email);
       return res.status(400).json({ error: 'Email already exists.' });
     }
 
-    // Hash password and save user
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
@@ -36,11 +32,9 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ✅ LOGIN
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
-  // Basic validation
   if (!email || !password) {
     return res.status(400).json({ error: 'Please fill all the fields.' });
   }

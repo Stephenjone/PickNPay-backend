@@ -2,13 +2,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Cart = require('../models/Cart');
 const Item = require('../models/Items');
+const Order = require('../models/Order');
 
 const router = express.Router();
 
-/**
- * GET /api/cart/:email
- * Fetch user's cart and populate item details
- */
+// GET cart items by email
 router.get('/:email', async (req, res) => {
   try {
     const email = req.params.email;
@@ -34,10 +32,7 @@ router.get('/:email', async (req, res) => {
   }
 });
 
-/**
- * POST /api/cart
- * Add an item to the user's cart
- */
+// POST add item to cart
 router.post('/', async (req, res) => {
   const { email, itemId } = req.body;
 
@@ -55,7 +50,6 @@ router.post('/', async (req, res) => {
     let cart = await Cart.findOne({ email });
     if (!cart) cart = new Cart({ email, items: [] });
 
-    // Remove invalid references (shouldn't be needed, but safe)
     cart.items = cart.items.filter(i => i.item != null);
 
     const existingItem = cart.items.find(i => i.item.toString() === itemId);
@@ -74,10 +68,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * PUT /api/cart/update
- * Update quantity of an item in the user's cart
- */
+// PUT update quantity or remove item
 router.put('/update', async (req, res) => {
   const { email, itemId, quantity } = req.body;
 
@@ -99,7 +90,7 @@ router.put('/update', async (req, res) => {
       return res.status(404).json({ error: 'Item not found in cart' });
 
     if (quantity <= 0) {
-      cart.items.splice(index, 1); // Remove item
+      cart.items.splice(index, 1);
     } else {
       cart.items[index].quantity = quantity;
     }
@@ -112,10 +103,7 @@ router.put('/update', async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/cart/:email
- * Optional: Clear entire cart for a user
- */
+// DELETE clear cart by email
 router.delete('/:email', async (req, res) => {
   const email = req.params.email;
   if (!email) return res.status(400).json({ error: 'Email is required' });

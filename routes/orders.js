@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
 
-// Generate unique Order ID
+
 function generateOrderId() {
   return "ORD-" + Math.floor(100000 + Math.random() * 900000);
 }

@@ -9,12 +9,10 @@ const router = express.Router();
 const storage = multer.diskStorage({
   destination: './uploads/',
   filename: (req, file, cb) => {
-    // Unique filename using timestamp and original extension
     cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 
-// Limit file size to 5MB, and accept only images
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
@@ -30,7 +28,7 @@ const upload = multer({
   },
 });
 
-// GET all items
+
 router.get('/', async (req, res) => {
   try {
     const items = await Item.find().sort({ createdAt: -1 });
@@ -41,7 +39,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST add new item with category and image upload
+
 router.post('/', upload.single('image'), async (req, res) => {
   try {
     const { name, price, category } = req.body;
@@ -49,24 +47,24 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('📦 New Item Request:', { name, price, category });
     console.log('🖼️ Uploaded File:', req.file);
 
-    // Validate all required fields
+    
     if (!name || !price || !category) {
       return res.status(400).json({ error: 'Name, price, and category are required' });
     }
 
-    // Validate category enum
+    
     const allowedCategories = ['Juice', 'Noodles', 'Maggie','Fruit Bowl', 'Egg','Sandwich','Shakes'];
     if (!allowedCategories.includes(category)) {
       return res.status(400).json({ error: `Category must be one of: ${allowedCategories.join(', ')}` });
     }
 
-    // Parse price as float and validate
+    
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) {
       return res.status(400).json({ error: 'Price must be a positive number' });
     }
 
-    // Handle image upload, filename saved or empty string
+    
     const image = req.file ? req.file.filename : '';
 
     const newItem = new Item({
@@ -82,7 +80,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   } catch (err) {
     console.error('❌ Error adding item:', err);
 
-    // Multer file size or type error handling
+   
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ error: 'Image size should not exceed 5MB' });
@@ -96,7 +94,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
-// DELETE item by ID
+
 router.delete('/:id', async (req, res) => {
   try {
     await Item.findByIdAndDelete(req.params.id);
