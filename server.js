@@ -21,13 +21,13 @@ const io = socketIo(server); // Initialize Socket.io
 // Allowed origins for CORS (frontend URLs)
 const allowedOrigins = [
   'http://localhost:3000',
-  process.env.CLIENT_URL, // e.g. 'https://picknpay-frontend-application.onrender.com'
+  process.env.CLIENT_URL, // e.g. 'https://yourfrontenddomain.com'
 ];
 
 // Setup CORS middleware
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true); // Allow non-browser tools like Postman
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // Allow tools like Postman
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
@@ -44,40 +44,47 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (uploads)
+// Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// API routes registration
+// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/orders', ordersRoutes);
 
-// Root endpoint for quick health check
+// Root API health check
 app.get('/', (req, res) => {
   res.send('✅ API is running...');
 });
 
-// WebSocket event to handle real-time updates
+// WebSocket connections
 io.on('connection', (socket) => {
   console.log('A user connected');
-
-  // You can emit events when data is updated
   socket.on('disconnect', () => {
     console.log('A user disconnected');
   });
 });
 
-// Example: emit a real-time update when an item is added to the cart
+// Real-time update emitter (can be used from anywhere)
 const notifyClients = (data) => {
-  io.emit('dataUpdated', data); // Sends updated data to all connected clients
+  io.emit('dataUpdated', data);
 };
 
-// Sample usage of the notifyClients function after some data changes
-// Assuming you add an item to the cart, you'd call notifyClients like this:
-// notifyClients(updatedCartData);
+// ========================================
+// Serve React frontend (for production)
+// ========================================
 
+app.use(express.static(path.join(__dirname, 'client', 'build')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
+});
+
+// ========================================
+
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled Error:', err.message);
   if (err.message.startsWith('❌ The CORS policy')) {
@@ -86,7 +93,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Connect to MongoDB and start server
+// Connect to MongoDB and start the server
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
