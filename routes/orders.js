@@ -2,69 +2,33 @@ const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
 
-// Util: Generate unique order ID
+// Function to generate unique order ID
 function generateOrderId() {
   return "ORD-" + Math.floor(100000 + Math.random() * 900000);
 }
 
-// Util: Generate 3-digit token
+// Function to generate a 3-digit token for orders
 function generateToken() {
   return String(Math.floor(1 + Math.random() * 999)).padStart(3, "0");
 }
 
-// ✅ SSE Client Registry
-let clients = [];
-
-// SSE route for Admin (subscribe to new orders)
-router.get("/stream", (req, res) => {
-  // Set headers for SSE
-  res.set({
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-
-  res.flushHeaders();
-
-  const clientId = Date.now();
-  const newClient = { id: clientId, res };
-  clients.push(newClient);
-
-  console.log(`📡 SSE client connected: ${clientId}`);
-
-  // Heartbeat to keep the connection alive
-  const keepAlive = setInterval(() => {
-    res.write(":\n\n"); // SSE comment to keep connection alive
-  }, 25000);
-
-  req.on("close", () => {
-    console.log(`❌ SSE client disconnected: ${clientId}`);
-    clients = clients.filter((c) => c.id !== clientId);
-    clearInterval(keepAlive);
-  });
-});
-
-// 🔔 Broadcast to all SSE clients
-function broadcastNewOrder(order) {
-  clients.forEach((client) => {
-    client.res.write(`data: ${JSON.stringify(order)}\n\n`);
-  });
-}
-
-// 📌 Create new order (User places order)
+// 📌 Create new order (User places an order)
 router.post("/", async (req, res) => {
   try {
     console.log("📦 Incoming POST /orders body:", req.body);
     const { username, email, items } = req.body;
 
+    // Validate the order data
     if (!username || !email || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Invalid order data" });
     }
 
+    // Calculate total order amount
     const totalAmount = items.reduce((sum, item) => {
       return sum + (item.price || 0) * (item.quantity || 0);
     }, 0);
 
+    // Create new order
     const newOrder = new Order({
       username,
       email,
@@ -73,21 +37,25 @@ router.post("/", async (req, res) => {
       orderId: generateOrderId(),
       token: generateToken(),
       status: "Pending",
-      isReceived: null,
-      notification: "",
+      isReceived: null, // Initially null, will be updated later
+      notification: "",  // Notification for user
     });
 
     await newOrder.save();
-
-    // Emit SSE event to all clients
-    broadcastNewOrder(newOrder.toObject());
-
-    console.log("🚀 Emitting newOrder via SSE:", newOrder._id);
-
     res.status(201).json({ message: "✅ Order placed successfully", order: newOrder });
   } catch (err) {
     console.error("❌ Error creating order:", err);
     res.status(500).json({ message: "Error creating order", error: err.message });
+  }
+});
+
+// 📋 Get all orders (Admin)
+router.get("/", async (req, res) => {
+  try {
+    const orders = await Order.find().sort({ createdAt: -1 });  // Sorting by creation date
+    res.json(orders.map((o) => ({ ...o.toObject(), notification: undefined }))); // Remove notification
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching orders", error: err.message });
   }
 });
 
@@ -97,16 +65,19 @@ router.put("/:id/accept", async (req, res) => {
     const existingOrder = await Order.findById(req.params.id);
     if (!existingOrder) return res.status(404).json({ message: "Order not found" });
 
-    let updatedFields = {
-      status: "Accepted",
-      notification: "✅ Order accepted! Please collect your food in 10 min.",
+    // Update order to "Accepted" status
+    let updatedFields = { 
+      status: "Accepted", 
+      notification: "✅ Order accepted! Please collect your food in 10 min." 
     };
+
+    // Assign token if it doesn't already exist
     if (!existingOrder.token) updatedFields.token = generateToken();
 
     const order = await Order.findByIdAndUpdate(req.params.id, updatedFields, { new: true });
     res.json({ message: "✅ Order accepted", order });
   } catch (err) {
-    res.status(500).json({ message: "Error accepting order" });
+    res.status(500).json({ message: "Error accepting order", error: err.message });
   }
 });
 
@@ -115,26 +86,27 @@ router.put("/:id/reject", async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      {
-        status: "Rejected",
-        notification: "❌ Oops! Restaurant cannot accept your order now.",
+      { 
+        status: "Rejected", 
+        notification: "❌ Oops! Restaurant cannot accept your order now." 
       },
       { new: true }
     );
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.json({ message: "✅ Order rejected", order });
   } catch (err) {
-    res.status(500).json({ message: "Error rejecting order" });
+    res.status(500).json({ message: "Error rejecting order", error: err.message });
   }
 });
 
-// 📦 Mark order received / not received (Admin)
+// ✅ Mark order as received (Admin)
 router.put("/:id/received", async (req, res) => {
   try {
     const { isReceived } = req.body;
     let notification = "";
     let status = "";
 
+    // Update notification and status based on received state
     if (isReceived === true) {
       notification = "✅ Your food has been collected successfully.";
       status = "Collected";
@@ -153,7 +125,18 @@ router.put("/:id/received", async (req, res) => {
 
     res.json({ message: "✅ Order status updated", order });
   } catch (err) {
-    res.status(500).json({ message: "Error updating received status" });
+    res.status(500).json({ message: "Error updating received status", error: err.message });
+  }
+});
+
+// 📥 User fetches their own orders
+router.get("/user/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const orders = await Order.find({ email }).sort({ createdAt: -1 });  // Fetch orders of a specific user
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching user orders", error: err.message });
   }
 });
 
@@ -164,7 +147,7 @@ router.delete("/:id", async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.json({ message: "🗑️ Order deleted successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Error deleting order" });
+    res.status(500).json({ message: "Error deleting order", error: err.message });
   }
 });
 
