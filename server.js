@@ -1,108 +1,51 @@
 const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
 
 dotenv.config();
-
-const authRoutes = require('./routes/auth');
-const itemsRoutes = require('./routes/items');
-const cartRoutes = require('./routes/cart');
-const uploadRoutes = require('./routes/upload');
-const ordersRoutes = require('./routes/orders');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: [
-      'http://localhost:3000',
-      process.env.CLIENT_URL, // your frontend URL(s)
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true,
+    origin: [process.env.CLIENT_URL || "http://localhost:3000"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
   }
 });
 
-// Attach io instance to app, so routes can use it
-app.set('io', io);
+// Export io to use in routes
+module.exports.io = io;
 
-// Allowed origins for CORS (frontend URLs)
-const allowedOrigins = [
-  'http://localhost:3000',
-  process.env.CLIENT_URL,
-];
-
-// Setup CORS middleware
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // Allow tools like Postman, curl
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      const msg = `❌ The CORS policy does not allow access from origin: ${origin}`;
-      return callback(new Error(msg), false);
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-app.use('/api/auth', authRoutes);
-app.use('/api/items', itemsRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/orders', ordersRoutes);
-
-app.get('/', (req, res) => {
-  res.send('✅ API is running...');
-});
-
-// WebSocket connection handler
+// Socket connection logic
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
+
+  socket.on('joinRoom', (userId) => {
+    if (userId) {
+      socket.join(userId);
+      console.log(`Socket ${socket.id} joined room ${userId}`);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
 });
 
-// Serve React frontend (production)
-app.use(express.static(path.join(__dirname, 'client', 'build')));
-app.use((req, res, next) => {
-  res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
-});
+// Your other middleware, routes, and MongoDB connection here...
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('❌ Unhandled Error:', err.message);
-  if (err.message.startsWith('❌ The CORS policy')) {
-    return res.status(403).json({ error: err.message });
-  }
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// Connect to MongoDB and start the server
+const PORT = process.env.PORT || 5000;
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-})
-.then(() => {
-  console.log('✅ MongoDB connected');
-  const PORT = process.env.PORT || 5000;
+}).then(() => {
   server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
-})
-.catch(err => {
-  console.error('❌ MongoDB connection error:', err);
+}).catch((err) => {
+  console.error(err);
   process.exit(1);
 });
