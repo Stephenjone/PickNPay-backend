@@ -15,19 +15,31 @@ const uploadRoutes = require('./routes/upload');
 const ordersRoutes = require('./routes/orders');
 
 const app = express();
-const server = http.createServer(app); // Create HTTP server for Socket.io
-const io = socketIo(server); // Initialize Socket.io
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: [
+      'http://localhost:3000',
+      process.env.CLIENT_URL, // your frontend URL(s)
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  }
+});
+
+// Attach io instance to app, so routes can use it
+app.set('io', io);
 
 // Allowed origins for CORS (frontend URLs)
 const allowedOrigins = [
   'http://localhost:3000',
-  process.env.CLIENT_URL, // e.g. 'https://yourfrontenddomain.com'
+  process.env.CLIENT_URL,
 ];
 
 // Setup CORS middleware
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // Allow tools like Postman
+    if (!origin) return callback(null, true); // Allow tools like Postman, curl
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
@@ -40,52 +52,34 @@ app.use(cors({
   credentials: true,
 }));
 
-// Parse incoming JSON and urlencoded form data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/orders', ordersRoutes);
 
-// Root API health check
 app.get('/', (req, res) => {
   res.send('✅ API is running...');
 });
 
-// WebSocket connections
+// WebSocket connection handler
 io.on('connection', (socket) => {
-  console.log('A user connected');
+  console.log('A user connected:', socket.id);
   socket.on('disconnect', () => {
-    console.log('A user disconnected');
+    console.log('User disconnected:', socket.id);
   });
 });
 
-// Real-time update emitter (can be used from anywhere)
-const notifyClients = (data) => {
-  io.emit('dataUpdated', data);
-};
-
-// ========================================
-// Serve React frontend (for production)
-// ========================================
-
+// Serve React frontend (production)
 app.use(express.static(path.join(__dirname, 'client', 'build')));
-
-// ✅ FIXED: Updated wildcard route syntax to avoid `PathError`
 app.use((req, res, next) => {
   res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
 });
-
-
-
-// ========================================
 
 // Global error handler
 app.use((err, req, res, next) => {
