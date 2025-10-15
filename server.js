@@ -16,7 +16,7 @@ const uploadRoutes = require('./routes/upload');
 const ordersRoutes = require('./routes/orders');
 
 const app = express();
-const server = http.createServer(app); // HTTP server for socket.io
+const server = http.createServer(app);
 const io = socketIo(server, {
   transports: ['websocket'],
   cors: {
@@ -26,7 +26,7 @@ const io = socketIo(server, {
   }
 });
 
-// ✅ Middleware to inject io into every request
+// Middleware to attach io to requests
 app.use((req, res, next) => {
   req.io = io;
   next();
@@ -46,11 +46,11 @@ app.use(cors({
   credentials: true,
 }));
 
-// Middleware for parsing requests
+// Middleware for parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static folder for uploaded files
+// Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API routes
@@ -60,24 +60,22 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/orders', ordersRoutes);
 
-// Health check
+// Health check route
 app.get('/', (req, res) => {
   res.send('✅ API is running...');
 });
 
-// ✅ Socket.IO connection handler
+// Socket.IO setup
 io.on('connection', (socket) => {
   console.log('⚡ A client connected');
 
-  // ✅ Join user-specific room based on email
   socket.on('joinRoom', (email) => {
     if (email) {
-      socket.join(email); // Join room named by user email
+      socket.join(email);
       console.log(`🟢 Socket joined room: ${email}`);
     }
   });
 
-  // Optional: handle manual room leave if needed
   socket.on('leaveRoom', (email) => {
     if (email) {
       socket.leave(email);
@@ -90,11 +88,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// Serve frontend (React build) in production
+// Serve React build in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'client', 'build')));
 
-  app.get('*', (req, res) => {
+  // ✅ FIXED: Use named wildcard for path-to-regexp compatibility
+  app.get('/:path(*)', (req, res) => {
     res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
   });
 }
@@ -108,7 +107,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Connect to MongoDB and start the server
+// Connect to MongoDB and start server
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
