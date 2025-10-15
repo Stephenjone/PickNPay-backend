@@ -88,15 +88,14 @@ io.on('connection', (socket) => {
   });
 });
 
-// Serve React build in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'client', 'build')));
 
-  // ✅ FIXED: Use named wildcard for path-to-regexp compatibility
-  app.get('/:path(*)', (req, res) => {
+  app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
   });
 }
+
 
 // Global error handler
 app.use((err, req, res, next) => {
