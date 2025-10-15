@@ -99,10 +99,13 @@ io.on("connection", (socket) => {
 
 // ✅ Serve frontend React app in production
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "client", "build")));
+  const clientBuildPath = path.join(__dirname, "client", "build");
 
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "client", "build", "index.html"));
+  app.use(express.static(clientBuildPath));
+
+  // Use regex for SPA routing
+  app.get(/^\/(?!api).*/, (req, res) => {
+    res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
 
