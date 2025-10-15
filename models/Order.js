@@ -1,21 +1,30 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const itemSchema = new mongoose.Schema({
-  name:     { type: String, required: true },
-  quantity: { type: Number, required: true },
-  price:    { type: Number, required: true },
+const ItemSchema = new mongoose.Schema({
+  name: String,
+  price: Number,
+  quantity: Number,
+  feedback: String,
+  rating: Number,
 });
 
-const orderSchema = new mongoose.Schema({
-  username:    { type: String, required: true },
-  email:       { type: String, required: true },
-  items:       { type: [itemSchema], required: true },
-  totalAmount: { type: Number, required: true },
-  orderId:     { type: String, required: true },
-  token:       { type: String, required: true },
-  status:      { type: String, default: "Pending" },
-  isReceived:  { type: Boolean, default: null },
-  notification:{ type: String, default: "" },
-}, { timestamps: true });
+const OrderSchema = new mongoose.Schema(
+  {
+    username: String,
+    email: String,
+    items: [ItemSchema],
+    totalAmount: Number,
+    orderId: String,
+    token: String,
+    userStatus: String,
+    adminStatus: String,
+    notification: String,
 
-module.exports = mongoose.model("Order", orderSchema);
+    // ✅ Order-level feedback fields
+    rating: { type: Number },
+    feedback: { type: String },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model('Order', OrderSchema);

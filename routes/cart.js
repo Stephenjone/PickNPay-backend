@@ -2,11 +2,12 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Cart = require('../models/Cart');
 const Item = require('../models/Items');
-const Order = require('../models/Order');
 
 const router = express.Router();
 
-// GET cart items by email
+/* ===============================
+   GET CART ITEMS BY EMAIL
+=============================== */
 router.get('/:email', async (req, res) => {
   try {
     const email = req.params.email;
@@ -32,7 +33,9 @@ router.get('/:email', async (req, res) => {
   }
 });
 
-// POST add item to cart
+/* ===============================
+   ADD ITEM TO CART
+=============================== */
 router.post('/', async (req, res) => {
   const { email, itemId } = req.body;
 
@@ -44,16 +47,15 @@ router.post('/', async (req, res) => {
 
   try {
     const item = await Item.findById(itemId);
-    if (!item)
-      return res.status(404).json({ error: 'Item not found' });
+    if (!item) return res.status(404).json({ error: 'Item not found' });
 
     let cart = await Cart.findOne({ email });
     if (!cart) cart = new Cart({ email, items: [] });
 
+    // Remove null items
     cart.items = cart.items.filter(i => i.item != null);
 
     const existingItem = cart.items.find(i => i.item.toString() === itemId);
-
     if (existingItem) {
       existingItem.quantity += 1;
     } else {
@@ -68,7 +70,9 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT update quantity or remove item
+/* ===============================
+   UPDATE ITEM QUANTITY IN CART
+=============================== */
 router.put('/update', async (req, res) => {
   const { email, itemId, quantity } = req.body;
 
@@ -78,18 +82,19 @@ router.put('/update', async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(itemId))
     return res.status(400).json({ error: 'Invalid item ID format' });
 
+  if (quantity == null || quantity < 0)
+    return res.status(400).json({ error: 'Quantity must be zero or positive' });
+
   try {
     const cart = await Cart.findOne({ email });
-    if (!cart)
-      return res.status(404).json({ error: 'Cart not found' });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
 
     cart.items = cart.items.filter(i => i.item != null);
 
     const index = cart.items.findIndex(i => i.item.toString() === itemId);
-    if (index === -1)
-      return res.status(404).json({ error: 'Item not found in cart' });
+    if (index === -1) return res.status(404).json({ error: 'Item not found in cart' });
 
-    if (quantity <= 0) {
+    if (quantity === 0) {
       cart.items.splice(index, 1);
     } else {
       cart.items[index].quantity = quantity;
@@ -103,16 +108,17 @@ router.put('/update', async (req, res) => {
   }
 });
 
-// DELETE clear cart by email
+/* ===============================
+   CLEAR CART BY EMAIL
+=============================== */
 router.delete('/:email', async (req, res) => {
   const email = req.params.email;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   try {
     const result = await Cart.findOneAndDelete({ email });
-    if (!result) {
-      return res.status(404).json({ message: 'Cart already empty or not found' });
-    }
+    if (!result) return res.status(404).json({ message: 'Cart already empty or not found' });
+
     res.json({ message: 'Cart cleared successfully' });
   } catch (err) {
     console.error('❌ Error clearing cart:', err);
@@ -120,4 +126,7 @@ router.delete('/:email', async (req, res) => {
   }
 });
 
+/* ===============================
+   ✅ FIXED: Add module.exports
+=============================== */
 module.exports = router;
