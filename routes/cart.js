@@ -17,7 +17,7 @@ router.get('/:email', async (req, res) => {
     if (!cart) return res.json({ items: [] });
 
     const cartItems = cart.items
-      .filter(entry => entry.item)
+      .filter(entry => entry.item) // Remove nulls
       .map(entry => ({
         _id: entry.item._id,
         name: entry.item.name,
@@ -63,6 +63,11 @@ router.post('/', async (req, res) => {
     }
 
     await cart.save();
+
+    // Optionally emit socket event here if needed
+    // const io = req.app.get('io');
+    // io.to(email).emit('cartUpdated', cart);
+
     res.json({ message: 'Item added to cart successfully' });
   } catch (err) {
     console.error('❌ Error adding item to cart:', err);
@@ -101,6 +106,11 @@ router.put('/update', async (req, res) => {
     }
 
     await cart.save();
+
+    // Optionally emit socket event
+    // const io = req.app.get('io');
+    // io.to(email).emit('cartUpdated', cart);
+
     res.json({ message: 'Cart updated successfully' });
   } catch (err) {
     console.error('❌ Error updating cart:', err);
@@ -119,6 +129,10 @@ router.delete('/:email', async (req, res) => {
     const result = await Cart.findOneAndDelete({ email });
     if (!result) return res.status(404).json({ message: 'Cart already empty or not found' });
 
+    // Optionally emit socket event
+    // const io = req.app.get('io');
+    // io.to(email).emit('cartCleared');
+
     res.json({ message: 'Cart cleared successfully' });
   } catch (err) {
     console.error('❌ Error clearing cart:', err);
@@ -126,7 +140,4 @@ router.delete('/:email', async (req, res) => {
   }
 });
 
-/* ===============================
-   ✅ FIXED: Add module.exports
-=============================== */
 module.exports = router;
