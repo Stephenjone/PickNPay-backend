@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -9,15 +8,17 @@ const socketIo = require("socket.io");
 
 dotenv.config();
 
+// Import route handlers
 const authRoutes = require("./routes/auth");
 const itemsRoutes = require("./routes/items");
 const cartRoutes = require("./routes/cart");
-const ordersRoutes = require("./routes/orders");
 const uploadRoutes = require("./routes/upload");
+const ordersRoutes = require("./routes/orders");
 
 const app = express();
 const server = http.createServer(app);
 
+// ✅ Configure Socket.io
 const io = socketIo(server, {
   transports: ["websocket", "polling"],
   cors: {
@@ -27,14 +28,13 @@ const io = socketIo(server, {
   },
 });
 
-// Make io accessible via req.app and req.io
-app.set("io", io);
+// ✅ Middleware to inject io into requests
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// CORS
+// ✅ CORS configuration
 const allowedOrigins = ["http://localhost:3000", process.env.CLIENT_URL];
 app.use(
   cors({
@@ -53,39 +53,42 @@ app.use(
   })
 );
 
+// ✅ Middleware for parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static uploads
+// ✅ Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Routes
+// ✅ API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/cart", cartRoutes);
-app.use("/api/orders", ordersRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/orders", ordersRoutes);
 
-// Root healthcheck
+// ✅ Health check endpoint
 app.get("/", (req, res) => {
   res.send("✅ API is running successfully...");
 });
 
-// Socket connections
+// ✅ Socket.IO handlers
 io.on("connection", (socket) => {
   console.log("⚡ Client connected:", socket.id);
 
+  // Join room based on user email
   socket.on("joinRoom", (email) => {
     if (email) {
       socket.join(email);
-      console.log(`🟢 Socket ${socket.id} joined room: ${email}`);
+      console.log(`🟢 Socket joined room: ${email}`);
     }
   });
 
+  // Leave room manually if requested
   socket.on("leaveRoom", (email) => {
     if (email) {
       socket.leave(email);
-      console.log(`🔴 Socket ${socket.id} left room: ${email}`);
+      console.log(`🔴 Socket left room: ${email}`);
     }
   });
 
@@ -94,16 +97,19 @@ io.on("connection", (socket) => {
   });
 });
 
-// Serve React client in production
+// ✅ Serve frontend React app in production
 if (process.env.NODE_ENV === "production") {
   const clientBuildPath = path.join(__dirname, "client", "build");
+
   app.use(express.static(clientBuildPath));
+
+  // Use regex for SPA routing
   app.get(/^\/(?!api).*/, (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
 
-// Global error handler
+// ✅ Global Error Handler
 app.use((err, req, res, next) => {
   console.error("❌ Global Error:", err.message);
   if (err.message.startsWith("❌ CORS policy")) {
@@ -112,7 +118,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// Connect to MongoDB and start server
+// ✅ Connect to MongoDB and start the server
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,

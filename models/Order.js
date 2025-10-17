@@ -21,10 +21,16 @@ const OrderSchema = new mongoose.Schema(
     notification: String,
 
     // ✅ Order-level feedback fields
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
+
     rating: { type: Number },
     feedback: { type: String },
   },
-  { timestamps: true }
+  
+  { timestamps: true },
+  
+  
 );
 
 module.exports = mongoose.model('Order', OrderSchema);
