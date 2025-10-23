@@ -2,8 +2,11 @@ const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
 const User = require("../models/User");
+const mongoose = require("mongoose");
 
-// Helper: generate orderId & token
+/* =========================================================
+   🔧 Helper Functions
+========================================================= */
 function generateOrderId() {
   return "ORD-" + Math.floor(100000 + Math.random() * 900000);
 }
@@ -11,9 +14,9 @@ function generateToken() {
   return String(Math.floor(1 + Math.random() * 999)).padStart(3, "0");
 }
 
-/* ==============================================
-   ✅ Admin: Get all orders (excluding adminDeleted)
-============================================== */
+/* =========================================================
+   ✅ Admin: Get All Orders
+========================================================= */
 router.get("/", async (req, res) => {
   try {
     const orders = await Order.find({ adminDeleted: false }).sort({ createdAt: -1 });
@@ -24,60 +27,76 @@ router.get("/", async (req, res) => {
   }
 });
 
-/* ==============================================
-   ✅ Create new order
-============================================== */
+/* =========================================================
+   ✅ Create a New Order
+========================================================= */
 router.post("/", async (req, res) => {
+  console.log("🟢 POST /orders received:", JSON.stringify(req.body, null, 2));
+
   try {
     const { username, email, items } = req.body;
 
-    if (!email || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: "Invalid order data" });
-    }
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    if (!Array.isArray(items) || items.length === 0)
+      return res.status(400).json({ message: "Items array must be non-empty" });
 
-    let uname = username;
+    let uname = username?.trim();
     if (!uname) {
-      const userFromDb = await User.findOne({ email });
-      uname = userFromDb ? userFromDb.name : "Guest";
+      const user = await User.findOne({ email }).select("name").lean();
+      uname = (user && user.name) || "Guest";
     }
 
     const totalAmount = items.reduce(
-      (sum, it) => sum + (it.price || 0) * (it.quantity || 0),
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0
     );
 
     const newOrder = new Order({
       username: uname,
       email,
-      items,
+      items: items.map((i) => ({
+        ...i,
+        rating: null,
+        feedback: null,
+      })),
       totalAmount,
       orderId: generateOrderId(),
       token: generateToken(),
       userStatus: "Food is getting prepared",
       adminStatus: "Pending",
-      notification: "",
+      notification: "Your order is being processed",
       adminDeleted: false,
     });
 
-    await newOrder.save();
+    const savedOrder = await newOrder.save();
+    console.log(`✅ Order saved successfully: ${savedOrder.orderId}`);
 
-    // Notify admin + user via sockets
-    req.io.emit("newOrder", newOrder);
-    req.io.to(email).emit("orderUpdated", newOrder);
+    // 🔔 Emit via Socket.io
+    if (req.io) {
+      req.io.emit("newOrder", savedOrder); // Notify Admin
+      req.io.to(email).emit("orderUpdated", savedOrder); // Notify User
+    }
 
-    res.status(201).json({ message: "Order placed", order: newOrder });
+    res.status(201).json({
+      message: "Order placed successfully",
+      order: savedOrder,
+      token: savedOrder.token,
+    });
   } catch (err) {
-    console.error("❌ Error placing order:", err);
-    res.status(500).json({ message: "Error placing order", error: err.message });
+    console.error("❌ Full error placing order:", err);
+    res.status(500).json({
+      message: "Error placing order",
+      error: err.message,
+    });
   }
 });
 
-/* ==============================================
-   ✅ Get orders for a specific user
-============================================== */
+/* =========================================================
+   ✅ Get Orders by User
+========================================================= */
 router.get("/user/:email", async (req, res) => {
   try {
-    const { email } = req.params;
+    const email = decodeURIComponent(req.params.email);
     if (!email) return res.status(400).json({ message: "Email is required" });
 
     const orders = await Order.find({ email }).sort({ createdAt: -1 });
@@ -88,22 +107,25 @@ router.get("/user/:email", async (req, res) => {
   }
 });
 
-/* ==============================================
-   ✅ Admin Accept Order
-============================================== */
+/* =========================================================
+   ✅ Admin: Accept Order
+========================================================= */
 router.put("/:id/accept", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     order.adminStatus = "Accepted";
-    order.userStatus = "Your order is accepted and being prepared";
+    order.userStatus = "Your order is accepted and is being prepared";
+    order.notification = "Food is being prepared";
     order.token = generateToken();
 
     await order.save();
 
-    req.io.to(order.email).emit("orderAccepted", order);
-    req.io.emit("orderUpdatedAdmin", order);
+    if (req.io) {
+      req.io.to(order.email).emit("orderUpdated", order);
+      req.io.emit("orderUpdatedAdmin", order);
+    }
 
     res.json({ message: "Order accepted", order });
   } catch (err) {
@@ -112,16 +134,16 @@ router.put("/:id/accept", async (req, res) => {
   }
 });
 
-/* ==============================================
-   ✅ Admin Mark Ready
-============================================== */
+/* =========================================================
+   ✅ Admin: Mark Order Ready
+========================================================= */
 router.put("/:id/ready", async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       {
-        userStatus: "Your order is ready! Please collect it.",
         adminStatus: "Ready to Serve",
+        userStatus: "Your order is ready! Please collect it.",
         notification: "Your order is ready for pickup",
       },
       { new: true }
@@ -129,100 +151,127 @@ router.put("/:id/ready", async (req, res) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    req.io.to(order.email).emit("orderUpdated", order);
-    req.io.emit("orderUpdatedAdmin", order);
+    if (req.io) {
+      req.io.to(order.email).emit("orderUpdated", order);
+      req.io.emit("orderUpdatedAdmin", order);
+    }
 
     res.json({ message: "Order marked as ready", order });
   } catch (err) {
-    console.error("❌ Error marking order ready:", err);
-    res.status(500).json({ message: "Error marking order ready", error: err.message });
+    console.error("❌ Error marking ready:", err);
+    res.status(500).json({ message: "Error marking ready", error: err.message });
   }
 });
 
-/* ==============================================
-   ✅ Admin Mark Collected
-============================================== */
+/* =========================================================
+   ✅ Admin: Update Collection Status
+========================================================= */
 router.put("/:id/collected", async (req, res) => {
   try {
     const { collected } = req.body;
+
     const update = collected
       ? {
-          userStatus: "Thank you for your order!",
           adminStatus: "Collected",
-          notification: "Your order has been collected",
+          userStatus: "Thank you for your order!",
+          notification: "Your order has been collected. Thank you!",
         }
       : {
-          userStatus: "Order is waiting, please collect from the counter",
           adminStatus: "Waiting for pickup",
-          notification: "Order is waiting, please collect from the counter",
+          userStatus: "Order is waiting, please collect from the counter",
+          notification: "Order is waiting for collection",
         };
 
     const order = await Order.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    req.io.to(order.email).emit("orderUpdated", order);
-    req.io.emit("orderUpdatedAdmin", order);
+    if (req.io) {
+      req.io.to(order.email).emit("orderUpdated", order);
+      req.io.emit("orderUpdatedAdmin", order);
+    }
 
-    res.json({ message: "Order status updated", order });
+    res.json({ message: "Order collection status updated", order });
   } catch (err) {
     console.error("❌ Error updating collected:", err);
     res.status(500).json({ message: "Error updating collected", error: err.message });
   }
 });
 
-/* ==============================================
-   ✅ User Feedback for Item
-============================================== */
+/* =========================================================
+   ✅ User: Add Feedback for an Item
+========================================================= */
+
+/* =========================================================
+   ✅ User: Add Feedback (Fixed & Verified)
+========================================================= */
 router.put("/:id/item/feedback", async (req, res) => {
   try {
     const { itemId, rating, feedback } = req.body;
-    if (!itemId || rating == null || feedback == null) {
-      return res.status(400).json({ message: "Missing fields" });
+    console.log("📩 Received feedback update:", { orderId: req.params.id, itemId, rating, feedback });
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid order ID" });
     }
 
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const item = order.items.id(itemId);
-    if (!item) return res.status(404).json({ message: "Item not found" });
+    // ✅ Match the item safely by converting ObjectIds to strings
+    const item = order.items.find(i => i._id.toString() === itemId.toString());
+    if (!item) return res.status(404).json({ message: "Item not found in order" });
 
-    item.rating = rating;
-    item.feedback = feedback;
+    // ✅ Update the feedback values
+    item.rating = Number(rating);
+    item.feedback = feedback?.trim() || "";
 
-    await order.save();
+    // ✅ Mark modified and save
+    order.markModified("items");
+    const updatedOrder = await order.save();
 
-    req.io.to(order.email).emit("orderUpdated", order);
-    req.io.emit("orderUpdatedAdmin", order);
+    console.log("✅ Feedback saved successfully:", {
+      itemName: item.name,
+      rating: item.rating,
+      feedback: item.feedback,
+    });
 
-    res.json({ message: "Feedback saved", order });
+    // ✅ Emit live update
+    if (req.io) {
+      req.io.to(order.email).emit("orderUpdated", updatedOrder);
+      req.io.emit("orderUpdatedAdmin", updatedOrder);
+    }
+
+    res.json({
+      message: "Item feedback saved successfully",
+      order: updatedOrder,
+    });
   } catch (err) {
-    console.error("❌ Error saving item feedback:", err);
-    res.status(500).json({ message: "Error saving feedback", error: err.message });
+    console.error("❌ Error saving feedback:", err);
+    res.status(500).json({
+      message: "Error saving feedback",
+      error: err.message,
+    });
   }
 });
 
-/* ==============================================
-   ✅ Admin Delete (Before Accept → Notify User)
-============================================== */
+
+
+
+/* =========================================================
+   ✅ Admin: Delete (Reject) Order
+========================================================= */
 router.delete("/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const wasPending = order.adminStatus === "Pending";
-
     await order.deleteOne();
 
-    // Notify user
-    if (wasPending) {
-      // 🟡 Deleted before acceptance
-      req.io.to(order.email).emit("orderRejectedBeforeAccept", {
-        message: "Oops! your order cannot be accepted now, please try later",
+    if (req.io) {
+      req.io.to(order.email).emit("orderRejected", {
+        message: "Oops! Your order cannot be accepted right now. Please try again later.",
         orderId: order.orderId,
       });
-    } else {
-      // 🔵 Deleted after processing
-      req.io.to(order.email).emit("orderRejected", order);
+      req.io.emit("orderUpdatedAdmin", { deletedOrderId: order._id });
     }
 
     res.json({ message: "Order deleted successfully" });

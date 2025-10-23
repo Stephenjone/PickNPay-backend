@@ -1,12 +1,11 @@
+// server.js
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const path = require("path");
 const http = require("http");
 const socketIo = require("socket.io");
-
-dotenv.config();
 
 // Import route handlers
 const authRoutes = require("./routes/auth");
@@ -22,26 +21,34 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   transports: ["websocket", "polling"],
   cors: {
-    origin: ["http://localhost:3000", process.env.CLIENT_URL],
+    origin: [
+      "http://localhost:3000",
+      process.env.CLIENT_URL, // from your .env
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
 });
 
-// ✅ Middleware to inject io into requests
+// ✅ Inject io into req for real-time events in routes
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
 // ✅ CORS configuration
-const allowedOrigins = ["http://localhost:3000", process.env.CLIENT_URL];
+const allowedOrigins = [
+  "http://localhost:3000",
+  process.env.CLIENT_URL, // https://picknpay-frontend-applications.onrender.com
+];
+
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+      console.warn(`⚠️  Blocked by CORS: ${origin}`);
       return callback(
         new Error(`❌ CORS policy does not allow access from origin: ${origin}`),
         false
@@ -69,12 +76,12 @@ app.use("/api/orders", ordersRoutes);
 
 // ✅ Health check endpoint
 app.get("/", (req, res) => {
-  res.send("✅ API is running successfully...");
+  res.status(200).send("✅ PickNPay API is running successfully...");
 });
 
-// ✅ Socket.IO handlers
+// ✅ Socket.IO Handlers
 io.on("connection", (socket) => {
-  console.log("⚡ Client connected:", socket.id);
+  console.log(`⚡ Client connected: ${socket.id}`);
 
   // Join room based on user email
   socket.on("joinRoom", (email) => {
@@ -84,7 +91,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Leave room manually if requested
+  // Leave room manually
   socket.on("leaveRoom", (email) => {
     if (email) {
       socket.leave(email);
@@ -93,17 +100,16 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("🔌 Client disconnected:", socket.id);
+    console.log(`🔌 Client disconnected: ${socket.id}`);
   });
 });
 
-// ✅ Serve frontend React app in production
+// ✅ Serve React frontend in production
 if (process.env.NODE_ENV === "production") {
   const clientBuildPath = path.join(__dirname, "client", "build");
-
   app.use(express.static(clientBuildPath));
 
-  // Use regex for SPA routing
+  // Catch-all route for SPA (non-API routes)
   app.get(/^\/(?!api).*/, (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
@@ -118,7 +124,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// ✅ Connect to MongoDB and start the server
+// ✅ Connect to MongoDB and start server
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -127,9 +133,9 @@ mongoose
   .then(() => {
     console.log("✅ MongoDB connected successfully");
     const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
+    server.listen(PORT, () =>
+      console.log(`🚀 Server running on port ${PORT}`)
+    );
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);

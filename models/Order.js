@@ -1,36 +1,27 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const ItemSchema = new mongoose.Schema({
-  name: String,
-  price: Number,
-  quantity: Number,
-  feedback: String,
-  rating: Number,
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  quantity: { type: Number, required: true },
+  rating: { type: Number, default: null }, // ✅ added
+  feedback: { type: String, default: "" },  // ✅ added
 });
 
 const OrderSchema = new mongoose.Schema(
   {
-    username: String,
-    email: String,
+    username: { type: String, required: true },
+    email: { type: String, required: true },
     items: [ItemSchema],
-    totalAmount: Number,
-    orderId: String,
-    token: String,
-    userStatus: String,
-    adminStatus: String,
-    notification: String,
-
-    // ✅ Order-level feedback fields
-    resetPasswordToken: { type: String },
-    resetPasswordExpires: { type: Date },
-
-    rating: { type: Number },
-    feedback: { type: String },
+    totalAmount: { type: Number, required: true },
+    orderId: { type: String, required: true },
+    token: { type: String },
+    userStatus: { type: String, default: "Food is getting prepared" },
+    adminStatus: { type: String, default: "Pending" },
+    notification: { type: String, default: "Your order is being processed" },
+    adminDeleted: { type: Boolean, default: false },
   },
-  
-  { timestamps: true },
-  
-  
+  { timestamps: true }
 );
 
-module.exports = mongoose.model('Order', OrderSchema);
+module.exports = mongoose.model("Order", OrderSchema);
