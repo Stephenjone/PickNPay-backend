@@ -39,6 +39,17 @@ async function sendPushNotification(email, title, body) {
   }
 }
 
+router.post("/fcm-token", async (req, res) => {
+  const { email, fcmToken } = req.body;
+  if (!email || !fcmToken) return res.status(400).json({ message: "Missing fields" });
+  try {
+    await User.findOneAndUpdate({ email }, { fcmToken }, { upsert: true });
+    res.json({ message: "FCM token saved" });
+  } catch (err) {
+    res.status(500).json({ message: "Error saving token", error: err.message });
+  }
+});
+
 /* =========================================================
    ✅ Admin: Get All Orders
 ========================================================= */
@@ -138,35 +149,35 @@ router.get("/user/:email", async (req, res) => {
 /* =========================================================
    ✅ Admin: Accept Order
 ========================================================= */
+// Accept order
 router.put("/:id/accept", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     order.adminStatus = "Accepted";
-    order.userStatus = "Your order is accepted and is being prepared";
+    order.userStatus = "Your order is accepted and being prepared";
     order.notification = "Food is being prepared";
     order.token = generateToken();
 
     await order.save();
 
+    // Socket.io notification
     if (req.io) {
       req.io.to(order.email).emit("orderUpdated", order);
       req.io.emit("orderUpdatedAdmin", order);
     }
 
-    await sendPushNotification(order.email, "Order Accepted", "Your order is being prepared.");
+    // Push notification
+    await sendPushNotification(order.email, "Order Accepted", order.notification);
 
     res.json({ message: "Order accepted", order });
   } catch (err) {
-    console.error("❌ Error accepting order:", err);
-    res.status(500).json({ message: "Error accepting order", error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-/* =========================================================
-   ✅ Admin: Mark Order Ready
-========================================================= */
+// Ready
 router.put("/:id/ready", async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(
@@ -186,31 +197,26 @@ router.put("/:id/ready", async (req, res) => {
       req.io.emit("orderUpdatedAdmin", order);
     }
 
-    await sendPushNotification(order.email, "Order Ready", "Your order is ready for pickup!");
-
-    res.json({ message: "Order marked as ready", order });
+    await sendPushNotification(order.email, "Order Ready", order.notification);
+    res.json({ message: "Order marked ready", order });
   } catch (err) {
-    console.error("❌ Error marking ready:", err);
-    res.status(500).json({ message: "Error marking ready", error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-/* =========================================================
-   ✅ Admin: Update Collection Status
-========================================================= */
+// Collected / Waiting
 router.put("/:id/collected", async (req, res) => {
   try {
     const { collected } = req.body;
-
     const update = collected
       ? {
           adminStatus: "Collected",
-          userStatus: "Thank you for your order!",
-          notification: "Your order has been collected. Thank you!",
+          userStatus: "Thank you! Your order has been collected",
+          notification: "Your order has been collected",
         }
       : {
           adminStatus: "Waiting for pickup",
-          userStatus: "Order is waiting, please collect from the counter",
+          userStatus: "Order is waiting, please collect",
           notification: "Order is waiting for collection",
         };
 
@@ -223,13 +229,12 @@ router.put("/:id/collected", async (req, res) => {
     }
 
     await sendPushNotification(order.email, "Order Update", order.notification);
-
     res.json({ message: "Order collection status updated", order });
   } catch (err) {
-    console.error("❌ Error updating collected:", err);
-    res.status(500).json({ message: "Error updating collected", error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
+
 
 /* =========================================================
    ✅ User: Add Feedback
