@@ -4,14 +4,39 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const mongoose = require("mongoose");
 
+// ✅ Use the initialized Firebase Admin from server.js
+const admin = require("../server"); // 🔑 ensures we use the env-configured Firebase Admin
+
 /* =========================================================
    🔧 Helper Functions
 ========================================================= */
 function generateOrderId() {
   return "ORD-" + Math.floor(100000 + Math.random() * 900000);
 }
+
 function generateToken() {
   return String(Math.floor(1 + Math.random() * 999)).padStart(3, "0");
+}
+
+// ✅ Helper: Send Push Notification
+async function sendPushNotification(email, title, body) {
+  try {
+    const user = await User.findOne({ email }).select("fcmToken");
+    if (!user || !user.fcmToken) {
+      console.warn(`⚠️ No FCM token found for ${email}`);
+      return;
+    }
+
+    const message = {
+      notification: { title, body },
+      token: user.fcmToken,
+    };
+
+    await admin.messaging().send(message);
+    console.log(`✅ Push sent to ${email}: ${title}`);
+  } catch (err) {
+    console.error("❌ Error sending push notification:", err);
+  }
 }
 
 /* =========================================================
@@ -77,6 +102,9 @@ router.post("/", async (req, res) => {
       req.io.to(email).emit("orderUpdated", savedOrder); // Notify User
     }
 
+    // 🔔 Push Notification
+    await sendPushNotification(email, "Order Placed", "Your order is being processed.");
+
     res.status(201).json({
       message: "Order placed successfully",
       order: savedOrder,
@@ -127,6 +155,8 @@ router.put("/:id/accept", async (req, res) => {
       req.io.emit("orderUpdatedAdmin", order);
     }
 
+    await sendPushNotification(order.email, "Order Accepted", "Your order is being prepared.");
+
     res.json({ message: "Order accepted", order });
   } catch (err) {
     console.error("❌ Error accepting order:", err);
@@ -155,6 +185,8 @@ router.put("/:id/ready", async (req, res) => {
       req.io.to(order.email).emit("orderUpdated", order);
       req.io.emit("orderUpdatedAdmin", order);
     }
+
+    await sendPushNotification(order.email, "Order Ready", "Your order is ready for pickup!");
 
     res.json({ message: "Order marked as ready", order });
   } catch (err) {
@@ -190,6 +222,8 @@ router.put("/:id/collected", async (req, res) => {
       req.io.emit("orderUpdatedAdmin", order);
     }
 
+    await sendPushNotification(order.email, "Order Update", order.notification);
+
     res.json({ message: "Order collection status updated", order });
   } catch (err) {
     console.error("❌ Error updating collected:", err);
@@ -198,11 +232,7 @@ router.put("/:id/collected", async (req, res) => {
 });
 
 /* =========================================================
-   ✅ User: Add Feedback for an Item
-========================================================= */
-
-/* =========================================================
-   ✅ User: Add Feedback (Fixed & Verified)
+   ✅ User: Add Feedback
 ========================================================= */
 router.put("/:id/item/feedback", async (req, res) => {
   try {
@@ -216,15 +246,12 @@ router.put("/:id/item/feedback", async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // ✅ Match the item safely by converting ObjectIds to strings
     const item = order.items.find(i => i._id.toString() === itemId.toString());
     if (!item) return res.status(404).json({ message: "Item not found in order" });
 
-    // ✅ Update the feedback values
     item.rating = Number(rating);
     item.feedback = feedback?.trim() || "";
 
-    // ✅ Mark modified and save
     order.markModified("items");
     const updatedOrder = await order.save();
 
@@ -234,7 +261,6 @@ router.put("/:id/item/feedback", async (req, res) => {
       feedback: item.feedback,
     });
 
-    // ✅ Emit live update
     if (req.io) {
       req.io.to(order.email).emit("orderUpdated", updatedOrder);
       req.io.emit("orderUpdatedAdmin", updatedOrder);
@@ -253,9 +279,6 @@ router.put("/:id/item/feedback", async (req, res) => {
   }
 });
 
-
-
-
 /* =========================================================
    ✅ Admin: Delete (Reject) Order
 ========================================================= */
@@ -273,6 +296,12 @@ router.delete("/:id", async (req, res) => {
       });
       req.io.emit("orderUpdatedAdmin", { deletedOrderId: order._id });
     }
+
+    await sendPushNotification(
+      order.email,
+      "Order Rejected",
+      "Sorry! Your order could not be accepted at the moment."
+    );
 
     res.json({ message: "Order deleted successfully" });
   } catch (err) {

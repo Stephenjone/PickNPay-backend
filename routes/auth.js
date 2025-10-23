@@ -130,4 +130,23 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
+router.post("/save-token", async (req, res) => {
+  const { email, token } = req.body;
+
+  if (!email || !token)
+    return res.status(400).json({ message: "Email and token required" });
+
+  try {
+    const user = await User.findOneAndUpdate(
+      { email },
+      { fcmToken: token },
+      { new: true, upsert: false }
+    );
+    res.json({ message: "FCM token saved", user });
+  } catch (err) {
+    console.error("❌ Error saving FCM token:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 module.exports = router;
