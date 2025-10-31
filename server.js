@@ -33,9 +33,6 @@ if (
   console.log("✅ Firebase Admin initialized from environment variables");
 }
 
-/* =========================================================
-   ⚡ Socket.io Configuration
-========================================================= */
 const io = socketIo(server, {
   transports: ["websocket", "polling"],
   cors: {
@@ -50,9 +47,7 @@ app.get("/", (req, res) => {
 });
 
 
-/* =========================================================
-   🔗 Import Route Handlers
-========================================================= */
+
 const authRoutes = require("./routes/auth");
 const itemsRoutes = require("./routes/items");
 const cartRoutes = require("./routes/cart");
@@ -60,16 +55,12 @@ const uploadRoutes = require("./routes/upload");
 const ordersRoutes = require("./routes/orders");
 
 
-/* =========================================================
-   ⚙️ Middleware Setup
-========================================================= */
-// Inject io into all requests for real-time updates
+
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
 
-// CORS
 const allowedOrigins = [process.env.FRONTEND_URL, process.env.CLIENT_URL];
 
 app.use(
@@ -95,9 +86,7 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-/* =========================================================
-   📦 API Routes
-========================================================= */
+
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/cart", cartRoutes);
@@ -105,14 +94,12 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/orders", ordersRoutes);
 
 
-// Health check
+
 app.get("/", (req, res) => {
   res.status(200).send("✅ PickNPay API is running successfully...");
 });
 
-/* =========================================================
-   ⚡ Socket.IO Events
-========================================================= */
+
 io.on("connection", (socket) => {
   console.log(`⚡ Client connected: ${socket.id}`);
 
@@ -136,9 +123,7 @@ io.on("connection", (socket) => {
   });
 });
 
-/* =========================================================
-   🏗️ Serve React Frontend in Production
-========================================================= */
+
 if (process.env.NODE_ENV === "production") {
   const clientBuildPath = path.join(__dirname, "client", "build");
   app.use(express.static(clientBuildPath));
@@ -149,9 +134,7 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-/* =========================================================
-   🧩 Global Error Handler
-========================================================= */
+
 app.use((err, req, res, next) => {
   console.error("❌ Global Error:", err.message);
   if (err.message.startsWith("❌ CORS policy")) {
@@ -160,9 +143,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-/* =========================================================
-   🚀 MongoDB Connection + Server Start
-========================================================= */
+
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -178,7 +159,5 @@ mongoose
     process.exit(1);
   });
 
-/* =========================================================
-   📤 Export Firebase Admin
-========================================================= */
+
 module.exports = admin;
