@@ -20,6 +20,7 @@ const OrderSchema = new mongoose.Schema(
     adminStatus: { type: String, default: "Pending" },
     notification: { type: String, default: "Your order is being processed" },
     adminDeleted: { type: Boolean, default: false },
+    fcmToken: { type: String, default: null },
   },
   { timestamps: true }
 );

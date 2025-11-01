@@ -4,8 +4,8 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 const mongoose = require("mongoose");
 
-// ✅ Use the initialized Firebase Admin from server.js
-const admin = require("../server"); // 🔑 ensures we use the env-configured Firebase Admin
+// ✅ Use Firebase Admin from server.js
+const admin = require("../server");
 
 /* =========================================================
    🔧 Helper Functions
@@ -18,7 +18,9 @@ function generateToken() {
   return String(Math.floor(1 + Math.random() * 999)).padStart(3, "0");
 }
 
-// ✅ Helper: Send Push Notification
+/* =========================================================
+   ✅ Push Notification Helper
+========================================================= */
 async function sendPushNotification(email, title, body) {
   try {
     const user = await User.findOne({ email }).select("fcmToken");
@@ -28,8 +30,15 @@ async function sendPushNotification(email, title, body) {
     }
 
     const message = {
-      notification: { title, body },
       token: user.fcmToken,
+      notification: { title, body },
+      webpush: {
+        notification: {
+          title,
+          body,
+          icon: "/logo192.png",
+        },
+      },
     };
 
     await admin.messaging().send(message);
@@ -39,45 +48,53 @@ async function sendPushNotification(email, title, body) {
   }
 }
 
-
-// Save FCM token
-router.post('/fcm-token', async (req, res) => {
+/* =========================================================
+   ✅ Save FCM Token (Used by Frontend)
+   Endpoint: POST /api/auth/save-fcm-token
+========================================================= */
+router.post("/save-fcm-token", async (req, res) => {
   try {
-    const { email, fcmToken } = req.body;
-    if (!email || !fcmToken) {
-      return res.status(400).json({ message: 'Missing email or token' });
+    const { email, token } = req.body;
+
+    if (!email || !token) {
+      return res.status(400).json({ error: "Email and token are required" });
     }
 
-    const user = await User.findOneAndUpdate(
+    console.log("📲 Saving FCM token for:", email);
+
+    await User.findOneAndUpdate(
       { email },
-      { fcmToken },
-      { new: true, upsert: true }
+      { $set: { fcmToken: token } },
+      { upsert: true, new: true }
     );
 
-    console.log(`💾 FCM token stored for ${email}`);
-    res.status(200).json({ message: 'Token saved successfully' });
-  } catch (err) {
-    console.error('❌ Error saving FCM token:', err);
-    res.status(500).json({ message: 'Failed to save token' });
+    res.status(200).json({ success: true, message: "FCM token saved" });
+  } catch (error) {
+    console.error("❌ Error saving FCM token:", error);
+    res.status(500).json({ error: "Failed to save token" });
   }
 });
 
-
 /* =========================================================
-   ✅ Admin: Get All Orders
+   ✅ Get All Orders (Admin)
 ========================================================= */
 router.get("/", async (req, res) => {
   try {
-    const orders = await Order.find({ adminDeleted: false }).sort({ createdAt: -1 });
+    const orders = await Order.find({ adminDeleted: false }).sort({
+      createdAt: -1,
+    });
     res.json(orders);
   } catch (err) {
     console.error("❌ Error fetching all orders:", err);
-    res.status(500).json({ message: "Error fetching all orders", error: err.message });
+    res.status(500).json({
+      message: "Error fetching all orders",
+      error: err.message,
+    });
   }
 });
 
 /* =========================================================
-   ✅ Create a New Order
+   ✅ Create New Order
 ========================================================= */
 router.post("/", async (req, res) => {
   console.log("🟢 POST /orders received:", JSON.stringify(req.body, null, 2));
@@ -120,10 +137,10 @@ router.post("/", async (req, res) => {
     const savedOrder = await newOrder.save();
     console.log(`✅ Order saved successfully: ${savedOrder.orderId}`);
 
-    // 🔔 Emit via Socket.io
+    // 🔔 Notify via Socket.io
     if (req.io) {
-      req.io.emit("newOrder", savedOrder); // Notify Admin
-      req.io.to(email).emit("orderUpdated", savedOrder); // Notify User
+      req.io.emit("newOrder", savedOrder);
+      req.io.to(email).emit("orderUpdated", savedOrder);
     }
 
     // 🔔 Push Notification
@@ -155,13 +172,17 @@ router.get("/user/:email", async (req, res) => {
     res.json(orders);
   } catch (err) {
     console.error("❌ Error fetching user orders:", err);
-    res.status(500).json({ message: "Error fetching user orders", error: err.message });
+    res.status(500).json({
+      message: "Error fetching user orders",
+      error: err.message,
+    });
   }
 });
 
 /* =========================================================
-   ✅ Admin: Accept Order
+   ✅ Accept / Ready / Collected / Feedback / Delete
 ========================================================= */
+
 // Accept order
 router.put("/:id/accept", async (req, res) => {
   try {
@@ -175,22 +196,19 @@ router.put("/:id/accept", async (req, res) => {
 
     await order.save();
 
-    // Socket.io notification
     if (req.io) {
       req.io.to(order.email).emit("orderUpdated", order);
       req.io.emit("orderUpdatedAdmin", order);
     }
 
-    // Push notification
     await sendPushNotification(order.email, "Order Accepted", order.notification);
-
     res.json({ message: "Order accepted", order });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Ready
+// Ready order
 router.put("/:id/ready", async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(
@@ -217,7 +235,7 @@ router.put("/:id/ready", async (req, res) => {
   }
 });
 
-// Collected / Waiting
+// Collected or waiting
 router.put("/:id/collected", async (req, res) => {
   try {
     const { collected } = req.body;
@@ -248,14 +266,10 @@ router.put("/:id/collected", async (req, res) => {
   }
 });
 
-
-/* =========================================================
-   ✅ User: Add Feedback
-========================================================= */
+// Feedback
 router.put("/:id/item/feedback", async (req, res) => {
   try {
     const { itemId, rating, feedback } = req.body;
-    console.log("📩 Received feedback update:", { orderId: req.params.id, itemId, rating, feedback });
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid order ID" });
@@ -264,7 +278,7 @@ router.put("/:id/item/feedback", async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const item = order.items.find(i => i._id.toString() === itemId.toString());
+    const item = order.items.find((i) => i._id.toString() === itemId.toString());
     if (!item) return res.status(404).json({ message: "Item not found in order" });
 
     item.rating = Number(rating);
@@ -272,12 +286,6 @@ router.put("/:id/item/feedback", async (req, res) => {
 
     order.markModified("items");
     const updatedOrder = await order.save();
-
-    console.log("✅ Feedback saved successfully:", {
-      itemName: item.name,
-      rating: item.rating,
-      feedback: item.feedback,
-    });
 
     if (req.io) {
       req.io.to(order.email).emit("orderUpdated", updatedOrder);
@@ -297,9 +305,7 @@ router.put("/:id/item/feedback", async (req, res) => {
   }
 });
 
-/* =========================================================
-   ✅ Admin: Delete (Reject) Order
-========================================================= */
+// Delete (Reject)
 router.delete("/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -309,7 +315,8 @@ router.delete("/:id", async (req, res) => {
 
     if (req.io) {
       req.io.to(order.email).emit("orderRejected", {
-        message: "Oops! Your order cannot be accepted right now. Please try again later.",
+        message:
+          "Oops! Your order cannot be accepted right now. Please try again later.",
         orderId: order.orderId,
       });
       req.io.emit("orderUpdatedAdmin", { deletedOrderId: order._id });

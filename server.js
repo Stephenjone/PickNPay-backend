@@ -7,78 +7,93 @@ const path = require("path");
 const http = require("http");
 const socketIo = require("socket.io");
 const admin = require("firebase-admin");
+const fs = require("fs");
 
-// Initialize Express + HTTP server
+/* =========================================================
+   🚀 Initialize Express + HTTP Server
+========================================================= */
 const app = express();
 const server = http.createServer(app);
 
 /* =========================================================
-   🔥 Initialize Firebase Admin using Environment Variables
+   🔥 Initialize Firebase Admin using Env Variables or Local JSON
 ========================================================= */
-if (
-  !process.env.FIREBASE_PROJECT_ID ||
-  !process.env.FIREBASE_CLIENT_EMAIL ||
-  !process.env.FIREBASE_PRIVATE_KEY
-) {
-  console.warn(
-    "⚠️ Missing Firebase environment variables. Push notifications may not work."
-  );
-} else {
+if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
+    // Prefer env vars, fallback to local key file
+    let serviceAccount;
+    if (
+      process.env.FIREBASE_PROJECT_ID &&
+      process.env.FIREBASE_CLIENT_EMAIL &&
+      process.env.FIREBASE_PRIVATE_KEY
+    ) {
+      serviceAccount = {
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process
-          .env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-      }),
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      };
+    } else if (fs.existsSync(path.join(__dirname, "firebaseServiceAccountKey.json"))) {
+      serviceAccount = require(path.join(__dirname, "firebaseServiceAccountKey.json"));
+      console.warn("⚠️ Using local firebaseServiceAccountKey.json instead of env vars");
+    }
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
     });
-    console.log("✅ Firebase Admin initialized from environment variables");
+    console.log("✅ Firebase Admin initialized");
   } catch (err) {
     console.error("❌ Firebase Admin init failed:", err.message);
   }
 }
 
 /* =========================================================
-   🔔 Helper function to send FCM notifications
+   🔔 Helper function to send FCM Notifications
 ========================================================= */
 async function sendPushNotification(token, title, body) {
   try {
     if (!token) {
-      console.warn("⚠️ No FCM token provided, skipping push notification.");
+      console.warn("⚠️ No FCM token provided — skipping notification.");
       return;
     }
 
     const message = {
       notification: { title, body },
       token,
+      webpush: {
+        notification: {
+          title,
+          body,
+          icon: "/logo192.png",
+        },
+      },
     };
 
     const response = await admin.messaging().send(message);
-    console.log(`✅ Push notification sent successfully: ${response}`);
+    console.log(`✅ Push notification sent: ${response}`);
   } catch (error) {
     console.error("❌ Error sending push notification:", error.message);
   }
 }
 
 /* =========================================================
-   ⚡ Socket.io Configuration
+   ⚡ Socket.io Setup
 ========================================================= */
 const io = socketIo(server, {
   transports: ["websocket", "polling"],
   cors: {
     origin: [
-      process.env.FRONTEND_URL,
-      process.env.CLIENT_URL,
+      "http://localhost:3000",
+      "https://picknpay-frontend.onrender.com", // your deployed frontend
       "https://fcm.googleapis.com",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
+
 /* =========================================================
-   🌍 Express Middlewares
+   🌍 Express Middleware
 ========================================================= */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -86,7 +101,8 @@ app.use(express.urlencoded({ extended: true }));
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   process.env.CLIENT_URL,
-  "https://fcm.googleapis.com",
+  "http://localhost:3000",
+  "https://picknpay-frontend.onrender.com",
 ];
 
 app.use(
@@ -105,7 +121,7 @@ app.use(
   })
 );
 
-// Make io available in requests
+// Attach io instance to every request
 app.use((req, res, next) => {
   req.io = io;
   next();
@@ -119,12 +135,14 @@ const itemsRoutes = require("./routes/items");
 const cartRoutes = require("./routes/cart");
 const uploadRoutes = require("./routes/upload");
 const ordersRoutes = require("./routes/orders");
+const notifyUserRoute = require("./routes/notifyUser");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/orders", ordersRoutes);
+app.use("/api/notify-user", notifyUserRoute);
 
 // File uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -138,7 +156,7 @@ app.get("/", (req, res) => {
    ⚙️ Socket.io Events
 ========================================================= */
 io.on("connection", (socket) => {
-  console.log(`⚡ Client connected: ${socket.id}`);
+  console.log(`⚡ Socket connected: ${socket.id}`);
 
   socket.on("joinRoom", (email) => {
     if (email) {
@@ -155,12 +173,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log(`🔌 Client disconnected: ${socket.id}`);
+    console.log(`🔌 Disconnected: ${socket.id}`);
   });
 });
 
 /* =========================================================
-   🌐 Production Static File Handling
+   🌐 Production Static Files
 ========================================================= */
 if (process.env.NODE_ENV === "production") {
   const clientBuildPath = path.join(__dirname, "client", "build");
@@ -171,7 +189,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 /* =========================================================
-   🧱 Global Error Handler
+   🧱 Error Handling
 ========================================================= */
 app.use((err, req, res, next) => {
   console.error("❌ Global Error:", err.message);
@@ -182,7 +200,7 @@ app.use((err, req, res, next) => {
 });
 
 /* =========================================================
-   🧩 Database + Server Start
+   🧩 Connect MongoDB + Start Server
 ========================================================= */
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -192,9 +210,7 @@ mongoose
   .then(() => {
     console.log("✅ MongoDB connected successfully");
     const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () =>
-      console.log(`🚀 Server running on port ${PORT}`)
-    );
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
