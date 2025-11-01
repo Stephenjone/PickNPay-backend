@@ -39,16 +39,28 @@ async function sendPushNotification(email, title, body) {
   }
 }
 
-router.post("/fcm-token", async (req, res) => {
-  const { email, fcmToken } = req.body;
-  if (!email || !fcmToken) return res.status(400).json({ message: "Missing fields" });
+// Save FCM token
+router.post('/fcm-token', async (req, res) => {
   try {
-    await User.findOneAndUpdate({ email }, { fcmToken }, { upsert: true });
-    res.json({ message: "FCM token saved" });
+    const { email, fcmToken } = req.body;
+    if (!email || !fcmToken) {
+      return res.status(400).json({ message: 'Missing email or token' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { email },
+      { fcmToken },
+      { new: true, upsert: true }
+    );
+
+    console.log(`💾 FCM token stored for ${email}`);
+    res.status(200).json({ message: 'Token saved successfully' });
   } catch (err) {
-    res.status(500).json({ message: "Error saving token", error: err.message });
+    console.error('❌ Error saving FCM token:', err);
+    res.status(500).json({ message: 'Failed to save token' });
   }
 });
+
 
 /* =========================================================
    ✅ Admin: Get All Orders
