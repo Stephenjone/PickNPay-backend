@@ -22,8 +22,8 @@ function generateToken() {
 async function sendPushNotification(email, title, body) {
   try {
     const user = await User.findOne({ email }).select("fcmToken");
-    if (!user || !user.fcmToken) {
-      console.warn(`⚠️ No FCM token found for ${email}`);
+    if (!user?.fcmToken) {
+      console.warn(`⚠️ No FCM token for ${email}`);
       return;
     }
 
@@ -35,9 +35,10 @@ async function sendPushNotification(email, title, body) {
     await admin.messaging().send(message);
     console.log(`✅ Push sent to ${email}: ${title}`);
   } catch (err) {
-    console.error("❌ Error sending push notification:", err);
+    console.error("❌ Error sending push:", err);
   }
 }
+
 
 // Save FCM token
 router.post('/fcm-token', async (req, res) => {

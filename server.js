@@ -8,6 +8,7 @@ const http = require("http");
 const socketIo = require("socket.io");
 const admin = require("firebase-admin");
 
+// Initialize Express + HTTP server
 const app = express();
 const server = http.createServer(app);
 
@@ -23,46 +24,70 @@ if (
     "⚠️ Missing Firebase environment variables. Push notifications may not work."
   );
 } else {
-  admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  }),
-});
-  console.log("✅ Firebase Admin initialized from environment variables");
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process
+          .env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
+    });
+    console.log("✅ Firebase Admin initialized from environment variables");
+  } catch (err) {
+    console.error("❌ Firebase Admin init failed:", err.message);
+  }
 }
 
+/* =========================================================
+   🔔 Helper function to send FCM notifications
+========================================================= */
+async function sendPushNotification(token, title, body) {
+  try {
+    if (!token) {
+      console.warn("⚠️ No FCM token provided, skipping push notification.");
+      return;
+    }
+
+    const message = {
+      notification: { title, body },
+      token,
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log(`✅ Push notification sent successfully: ${response}`);
+  } catch (error) {
+    console.error("❌ Error sending push notification:", error.message);
+  }
+}
+
+/* =========================================================
+   ⚡ Socket.io Configuration
+========================================================= */
 const io = socketIo(server, {
   transports: ["websocket", "polling"],
   cors: {
-    origin: [process.env.FRONTEND_URL, process.env.CLIENT_URL],
+    origin: [
+      process.env.FRONTEND_URL,
+      process.env.CLIENT_URL,
+      "https://fcm.googleapis.com",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
 });
 
+/* =========================================================
+   🌍 Express Middlewares
+========================================================= */
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.get("/", (req, res) => {
-  res.status(200).send("✅ PickNPay API is running successfully...");
-});
-
-
-
-const authRoutes = require("./routes/auth");
-const itemsRoutes = require("./routes/items");
-const cartRoutes = require("./routes/cart");
-const uploadRoutes = require("./routes/upload");
-const ordersRoutes = require("./routes/orders");
-
-
-
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
-
-const allowedOrigins = [process.env.FRONTEND_URL, process.env.CLIENT_URL];
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+  "https://fcm.googleapis.com",
+];
 
 app.use(
   cors({
@@ -80,13 +105,20 @@ app.use(
   })
 );
 
-// JSON + URL parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Make io available in requests
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
-// Serve uploaded files
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
+/* =========================================================
+   📦 Routes
+========================================================= */
+const authRoutes = require("./routes/auth");
+const itemsRoutes = require("./routes/items");
+const cartRoutes = require("./routes/cart");
+const uploadRoutes = require("./routes/upload");
+const ordersRoutes = require("./routes/orders");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
@@ -94,17 +126,20 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/orders", ordersRoutes);
 
+// File uploads
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-
+// Root endpoint
 app.get("/", (req, res) => {
   res.status(200).send("✅ PickNPay API is running successfully...");
 });
 
-
+/* =========================================================
+   ⚙️ Socket.io Events
+========================================================= */
 io.on("connection", (socket) => {
   console.log(`⚡ Client connected: ${socket.id}`);
 
-  // Join user room
   socket.on("joinRoom", (email) => {
     if (email) {
       socket.join(email);
@@ -124,18 +159,20 @@ io.on("connection", (socket) => {
   });
 });
 
-
+/* =========================================================
+   🌐 Production Static File Handling
+========================================================= */
 if (process.env.NODE_ENV === "production") {
   const clientBuildPath = path.join(__dirname, "client", "build");
   app.use(express.static(clientBuildPath));
-
-  // Catch-all route for SPA
   app.get(/^\/(?!api).*/, (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
 
-
+/* =========================================================
+   🧱 Global Error Handler
+========================================================= */
 app.use((err, req, res, next) => {
   console.error("❌ Global Error:", err.message);
   if (err.message.startsWith("❌ CORS policy")) {
@@ -144,7 +181,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-
+/* =========================================================
+   🧩 Database + Server Start
+========================================================= */
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -153,12 +192,16 @@ mongoose
   .then(() => {
     console.log("✅ MongoDB connected successfully");
     const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    server.listen(PORT, () =>
+      console.log(`🚀 Server running on port ${PORT}`)
+    );
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
     process.exit(1);
   });
 
-
-module.exports = admin;
+/* =========================================================
+   🔁 Export Firebase Admin + Helper
+========================================================= */
+module.exports = { admin, sendPushNotification };
