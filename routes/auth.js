@@ -7,7 +7,9 @@ const User = require("../models/User");
 
 const router = express.Router();
 
-// ✅ REGISTER
+/* =========================================================
+   ✅ REGISTER
+========================================================= */
 router.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -33,7 +35,9 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// ✅ LOGIN
+/* =========================================================
+   ✅ LOGIN
+========================================================= */
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -45,13 +49,12 @@ router.post("/login", async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found." });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
+    if (!isMatch)
+      return res.status(400).json({ error: "Invalid credentials." });
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
 
     return res.status(200).json({
       message: "Login successful!",
@@ -64,7 +67,9 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// ✅ Forgot Password
+/* =========================================================
+   🔑 Forgot Password
+========================================================= */
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Email is required." });
@@ -108,7 +113,9 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
-// ✅ Reset Password
+/* =========================================================
+   🔐 Reset Password
+========================================================= */
 router.post("/reset-password", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
@@ -130,22 +137,30 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
-router.post("/save-token", async (req, res) => {
-  const { email, token } = req.body;
-
-  if (!email || !token)
-    return res.status(400).json({ message: "Email and token required" });
-
+/* =========================================================
+   🔔 Save / Update FCM Token (for Push Notifications)
+========================================================= */
+router.post("/save-fcm-token", async (req, res) => {
   try {
+    const { email, fcmToken } = req.body;
+
+    if (!email || !fcmToken)
+      return res.status(400).json({ error: "Email and FCM token required." });
+
     const user = await User.findOneAndUpdate(
       { email },
-      { fcmToken: token },
-      { new: true, upsert: false }
+      { $set: { fcmToken } },
+      { upsert: true, new: true }
     );
-    res.json({ message: "FCM token saved", user });
+
+    console.log(`✅ FCM token saved for: ${email}`);
+    return res.status(200).json({
+      message: "FCM token saved successfully.",
+      user,
+    });
   } catch (err) {
-    console.error("❌ Error saving FCM token:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Error saving FCM token:", err.message);
+    res.status(500).json({ error: "Server error. Please try again later." });
   }
 });
 

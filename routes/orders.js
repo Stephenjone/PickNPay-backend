@@ -5,7 +5,9 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 
 // ✅ Use Firebase Admin from server.js
-const admin = require("../server");
+const { admin } = require("../server");
+
+
 
 /* =========================================================
    🔧 Helper Functions
