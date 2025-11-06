@@ -11,20 +11,18 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    console.log("🔍 Looking up FCM token for:", email);
+    console.log("🔍 Looking up user for notification:", email);
     const user = await User.findOne({ email });
-    
     if (!user) {
       console.warn("❌ User not found:", email);
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     if (!user.fcmToken) {
       console.warn("❌ No FCM token for user:", email);
       return res.status(404).json({ error: "User FCM token not found" });
     }
 
-    console.log("✅ Found FCM token for:", email);
     const message = {
       token: user.fcmToken,
       notification: { title, body },
@@ -38,18 +36,15 @@ router.post("/", async (req, res) => {
           actions: [{ action: 'open', title: 'View Order' }]
         },
         fcm_options: {
-          link: '/myorders'  // URL to open when notification is clicked
+          link: '/myorders'
         }
       }
     };
-
-    // Verify Firebase Admin is initialized
     if (!admin.apps.length) {
       throw new Error("Firebase Admin not initialized");
     }
-
     const response = await admin.messaging().send(message);
-    console.log("✅ Push notification sent to:", email, "Response:", response);
+    console.log("✅ FCM push notification sent to:", email, "Response:", response);
     res.json({ success: true, message: "Notification sent successfully" });
   } catch (error) {
     console.error("❌ Push notification error:", error);

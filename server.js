@@ -30,7 +30,7 @@ if (!admin.apps.length) {
       serviceAccount = {
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\n/g, "\n"),
       };
     } else if (fs.existsSync(path.join(__dirname, "firebaseServiceAccountKey.json"))) {
       serviceAccount = require(path.join(__dirname, "firebaseServiceAccountKey.json"));
@@ -49,31 +49,38 @@ if (!admin.apps.length) {
 /* =========================================================
    🔔 Helper function to send FCM Notifications
 ========================================================= */
-async function sendPushNotification(token, title, body) {
+async function sendPushNotification(expoPushToken, title, body) {
   try {
-    if (!token) {
-      console.warn("⚠️ No FCM token provided — skipping notification.");
+    if (!expoPushToken) {
+      console.warn("⚠️ No Expo Push Token provided — skipping notification.");
       return;
     }
 
     const message = {
-      notification: { title, body },
-      token,
-      webpush: {
-        notification: {
-          title,
-          body,
-          icon: "/logo192.png",
-        },
-      },
+      to: expoPushToken,
+      sound: 'default',
+      title: title,
+      body: body,
+      data: { someData: 'goes here' },
     };
 
-    const response = await admin.messaging().send(message);
-    console.log(`✅ Push notification sent: ${response}`);
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    const result = await response.json();
+    console.log(`✅ Push notification sent:`, result);
   } catch (error) {
     console.error("❌ Error sending push notification:", error.message);
   }
 }
+
 
 /* =========================================================
    ⚡ Socket.io Setup
@@ -215,6 +222,7 @@ app.use((err, req, res, next) => {
 /* =========================================================
    🧩 Connect MongoDB + Start Server
 ========================================================= */
+
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -222,7 +230,7 @@ mongoose
   })
   .then(() => {
     console.log("✅ MongoDB connected successfully");
-    const PORT = process.env.PORT || 5000;
+  const PORT = process.env.PORT || 5001;
     server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {
