@@ -298,7 +298,7 @@ router.delete("/:id", async (req, res) => {
     if (req.io) {
       req.io.to(order.email).emit("orderRejected", {
         message:
-          "Oops! Your order cannot be accepted right now. Please try again later.",
+          "Oops! Restaurant cannot accept your order at the moment! Please try again later",
         orderId: order.orderId,
       });
       req.io.emit("orderUpdatedAdmin", { deletedOrderId: order._id });
@@ -306,8 +306,8 @@ router.delete("/:id", async (req, res) => {
 
     await sendPushNotification(
       order.email,
-      "Order Rejected",
-      "Sorry! Your order could not be accepted at the moment."
+      "Order Not Accepted",
+      "Oops! Restaurant cannot accept your order at the moment! Please try again later"
     );
 
     res.json({ message: "Order deleted successfully" });
