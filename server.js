@@ -130,6 +130,9 @@ app.use((req, res, next) => {
 /* =========================================================
    📦 Routes
 ========================================================= */
+/* =========================================================
+   📦 Routes
+========================================================= */
 const authRoutes = require("./routes/auth");
 const itemsRoutes = require("./routes/items");
 const cartRoutes = require("./routes/cart");
@@ -137,12 +140,22 @@ const uploadRoutes = require("./routes/upload");
 const ordersRoutes = require("./routes/orders");
 const notifyUserRoute = require("./routes/notifyUser");
 
+// Register routes
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/notify-user", notifyUserRoute);
+
+console.log("✅ Routes registered:", {
+  auth: "/api/auth",
+  items: "/api/items",
+  cart: "/api/cart",
+  upload: "/api/upload",
+  orders: "/api/orders",
+  notify: "/api/notify-user"
+});
 
 // File uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

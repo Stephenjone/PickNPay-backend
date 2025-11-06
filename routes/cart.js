@@ -129,9 +129,7 @@ router.delete('/:email', async (req, res) => {
     const result = await Cart.findOneAndDelete({ email });
     if (!result) return res.status(404).json({ message: 'Cart already empty or not found' });
 
-    // Optionally emit socket event
-    // const io = req.app.get('io');
-    // io.to(email).emit('cartCleared');
+   
 
     res.json({ message: 'Cart cleared successfully' });
   } catch (err) {

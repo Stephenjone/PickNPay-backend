@@ -29,9 +29,7 @@ router.post("/register", async (req, res) => {
     return res.status(201).json({ message: "Registration successful!" });
   } catch (err) {
     console.error("❌ Register error:", err.message);
-    return res
-      .status(500)
-      .json({ error: "Server error. Please try again later." });
+    return res.status(500).json({ error: "Server error. Please try again later." });
   }
 });
 
@@ -56,7 +54,7 @@ router.post("/login", async (req, res) => {
       expiresIn: "1h",
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Login successful!",
       token,
       user: { id: user._id, name: user.name, email: user.email },
@@ -68,7 +66,7 @@ router.post("/login", async (req, res) => {
 });
 
 /* =========================================================
-   🔑 Forgot Password
+   🔐 Reset Password Flow
 ========================================================= */
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
@@ -99,7 +97,6 @@ router.post("/forgot-password", async (req, res) => {
       subject: "Password Reset",
       html: `
         <p>You requested a password reset.</p>
-        <p>Click this link to reset your password:</p>
         <a href="${resetLink}">${resetLink}</a>
         <p>This link is valid for 1 hour.</p>
       `,
@@ -113,15 +110,10 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
-/* =========================================================
-   🔐 Reset Password
-========================================================= */
 router.post("/reset-password", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
-    return res
-      .status(400)
-      .json({ error: "Email and new password are required." });
+    return res.status(400).json({ error: "Email and new password required." });
 
   try {
     const user = await User.findOne({ email });
@@ -137,31 +129,58 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
+// Add this new route to auth.js
+router.get("/fcm-token/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const user = await User.findOne({ email }).select("email fcmToken");
+    
+    if (!user) {
+      return res.status(404).json({ 
+        error: "User not found",
+        email 
+      });
+    }
+
+    return res.json({
+      email: user.email,
+      hasFcmToken: !!user.fcmToken,
+      fcmTokenPreview: user.fcmToken ? `${user.fcmToken.substring(0, 20)}...` : null
+    });
+  } catch (err) {
+    console.error("FCM token debug error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 /* =========================================================
-   🔔 Save / Update FCM Token (for Push Notifications)
+   🔔 Save / Update FCM Token
 ========================================================= */
+
+// ✅ Save FCM token (called from frontend/firebase.js)
 router.post("/save-fcm-token", async (req, res) => {
   try {
-    const { email, fcmToken } = req.body;
-
-    if (!email || !fcmToken)
-      return res.status(400).json({ error: "Email and FCM token required." });
+    const { email, token } = req.body;
+    if (!email || !token) {
+      return res.status(400).json({ error: "Email and token are required" });
+    }
 
     const user = await User.findOneAndUpdate(
       { email },
-      { $set: { fcmToken } },
-      { upsert: true, new: true }
+      { fcmToken: token },
+      { new: true, upsert: false }
     );
 
-    console.log(`✅ FCM token saved for: ${email}`);
-    return res.status(200).json({
-      message: "FCM token saved successfully.",
-      user,
-    });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log(`✅ FCM token saved for ${email}: ${token.substring(0, 20)}...`);
+    res.json({ success: true, message: "FCM token saved successfully" });
   } catch (err) {
-    console.error("❌ Error saving FCM token:", err.message);
-    res.status(500).json({ error: "Server error. Please try again later." });
+    console.error("❌ Error saving FCM token:", err);
+    res.status(500).json({ error: "Failed to save FCM token" });
   }
 });
+
 
 module.exports = router;

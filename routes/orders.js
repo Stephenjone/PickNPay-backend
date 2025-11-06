@@ -54,28 +54,7 @@ async function sendPushNotification(email, title, body) {
    ✅ Save FCM Token (Used by Frontend)
    Endpoint: POST /api/auth/save-fcm-token
 ========================================================= */
-router.post("/save-fcm-token", async (req, res) => {
-  try {
-    const { email, token } = req.body;
 
-    if (!email || !token) {
-      return res.status(400).json({ error: "Email and token are required" });
-    }
-
-    console.log("📲 Saving FCM token for:", email);
-
-    await User.findOneAndUpdate(
-      { email },
-      { $set: { fcmToken: token } },
-      { upsert: true, new: true }
-    );
-
-    res.status(200).json({ success: true, message: "FCM token saved" });
-  } catch (error) {
-    console.error("❌ Error saving FCM token:", error);
-    res.status(500).json({ error: "Failed to save token" });
-  }
-});
 
 /* =========================================================
    ✅ Get All Orders (Admin)
@@ -130,6 +109,7 @@ router.post("/", async (req, res) => {
       totalAmount,
       orderId: generateOrderId(),
       token: generateToken(),
+      fcmToken: req.body.fcmToken || null,
       userStatus: "Food is getting prepared",
       adminStatus: "Pending",
       notification: "Your order is being processed",
