@@ -146,6 +146,7 @@ const cartRoutes = require("./routes/cart");
 const uploadRoutes = require("./routes/upload");
 const ordersRoutes = require("./routes/orders");
 const notifyUserRoute = require("./routes/notifyUser");
+const rejectOrderRoute = require("./routes/rejectOrder");
 
 // Register routes
 app.use("/api/auth", authRoutes);
@@ -154,6 +155,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/notify-user", notifyUserRoute);
+app.use("/api/reject-order", rejectOrderRoute);
 
 console.log("✅ Routes registered:", {
   auth: "/api/auth",
@@ -161,7 +163,8 @@ console.log("✅ Routes registered:", {
   cart: "/api/cart",
   upload: "/api/upload",
   orders: "/api/orders",
-  notify: "/api/notify-user"
+  notify: "/api/notify-user",
+  reject: "/api/reject-order"
 });
 
 // File uploads
