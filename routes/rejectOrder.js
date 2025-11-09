@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
+const User = require("../models/User");
 const { admin } = require("../server");
 
 router.post("/reject-order/:orderId", async (req, res) => {
