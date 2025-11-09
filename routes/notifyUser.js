@@ -25,7 +25,27 @@ router.post("/", async (req, res) => {
 
     const message = {
       token: user.fcmToken,
-      notification: { title, body },
+      notification: { 
+        title, 
+        body,
+        sound: 'default'
+      },
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title,
+              body,
+            },
+            sound: 'default',
+            badge: 1,
+            contentAvailable: true,
+          },
+          data: {
+            screen: 'myorders'
+          }
+        },
+      },
       webpush: {
         notification: {
           title,
