@@ -148,10 +148,17 @@ router.post("/", async (req, res) => {
 router.get("/user/:email", async (req, res) => {
   try {
     const email = decodeURIComponent(req.params.email);
-    if (!email) return res.status(400).json({ message: "Email is required" });
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
 
-    const orders = await Order.find({ email }).sort({ createdAt: -1 });
-    res.json(orders);
+    // ❗ Exclude adminDeleted orders
+    const orders = await Order.find({
+      email,
+      adminDeleted: false
+    }).sort({ createdAt: -1 });
+
+    res.json(orders || []);
   } catch (err) {
     console.error("❌ Error fetching user orders:", err);
     res.status(500).json({
