@@ -119,20 +119,33 @@ router.post("/", async (req, res) => {
     const savedOrder = await newOrder.save();
     console.log(`✅ Order saved successfully: ${savedOrder.orderId}`);
 
-    // 🔔 Notify via Socket.io
+    /* =========================================================
+       🔔 REAL-TIME: Notify Admin + User Instantly
+    ========================================================= */
+
     if (req.io) {
-      req.io.emit("newOrder", savedOrder);
-      req.io.to(email).emit("orderUpdated", savedOrder);
+
+
+      // 🔔 Notify the user who placed the order
+      req.io.to("adminRoom").emit("adminNewOrder", { order: savedOrder });
+
     }
 
-    // 🔔 Push Notification
-    await sendPushNotification(email, "Order Placed", "Your order is being processed.");
+    /* =========================================================
+       🔔 Push Notification to User
+    ========================================================= */
+    await sendPushNotification(
+      email,
+      "Order Placed",
+      "Your order is being processed."
+    );
 
     res.status(201).json({
       message: "Order placed successfully",
       order: savedOrder,
       token: savedOrder.token,
     });
+
   } catch (err) {
     console.error("❌ Full error placing order:", err);
     res.status(500).json({
@@ -141,6 +154,8 @@ router.post("/", async (req, res) => {
     });
   }
 });
+
+
 
 /* =========================================================
    ✅ Get Orders by User

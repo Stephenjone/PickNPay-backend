@@ -181,11 +181,18 @@ app.get("/", (req, res) => {
 io.on("connection", (socket) => {
   console.log(`⚡ Socket connected: ${socket.id}`);
 
+  // USER JOINS A PRIVATE ROOM
   socket.on("joinRoom", (email) => {
     if (email) {
       socket.join(email);
-      console.log(`🟢 Joined room: ${email}`);
+      console.log(`🟢 User joined room: ${email}`);
     }
+  });
+
+  // ADMIN JOINS ADMIN ROOM
+  socket.on("joinAdmin", () => {
+    socket.join("adminRoom");
+    console.log(`🟣 ADMIN joined adminRoom: ${socket.id}`);
   });
 
   socket.on("leaveRoom", (email) => {
