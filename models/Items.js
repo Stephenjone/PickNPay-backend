@@ -1,4 +1,3 @@
-// models/Items.js
 const mongoose = require('mongoose');
 
 const itemSchema = new mongoose.Schema(
@@ -9,7 +8,8 @@ const itemSchema = new mongoose.Schema(
     image: String,
     category: {
       type: String,
-      enum: ['Juice', 'Noodles','Maggie','Fruit Bowl', 'Egg','Sandwich','Shakes'],
+      // 💡 FIX 2: Added 'Fruits' and changed 'Shakes' to 'Milk shake' for consistency with client/route logic
+      enum: ['Juice', 'Noodles', 'Maggie', 'Fruit Bowl', 'Egg', 'Sandwich', 'Milk shake', 'Fruits'],
       required: true,
     },
   },

@@ -50,6 +50,7 @@ router.post("/", upload.single("image"), async (req, res) => {
     if (!name || !price || !category)
       return res.status(400).json({ error: "All fields are required" });
 
+    // Ensure the allowed categories list matches the one in Navbar.js/Items.js model
     const allowedCategories = [
       "Sandwich",
       "Fruits",
@@ -75,7 +76,8 @@ router.post("/", upload.single("image"), async (req, res) => {
     const newItem = new Item({ name, price: parsedPrice, category, image });
     await newItem.save();
 
-    res.json({ message: "Item added successfully" });
+    // 💡 REAL-TIME FIX: Return the newly created item
+    res.status(201).json({ message: "Item added successfully", item: newItem });
   } catch (err) {
     console.error("Add item error:", err);
 
